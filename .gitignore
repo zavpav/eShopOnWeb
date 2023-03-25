@@ -257,3 +257,8 @@ pub/
 
 #Ignore marker-file used to know which docker files we have.
 .eshopdocker_*
+/src/Web/Properties/ServiceDependencies/Web20230325164535 - Web Deploy/profile.arm.json
+/Terraform/terraform.tfstate.backup
+/Terraform/terraform.tfstate
+/Terraform/.terraform.lock.hcl
+/Terraform/.terraform/providers/registry.terraform.io/hashicorp
