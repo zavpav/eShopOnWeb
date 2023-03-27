@@ -45,20 +45,30 @@ resource azurerm_key_vault kv_webapp {
   location = local.location
   tenant_id = data.azurerm_client_config.current.tenant_id
   sku_name = "standard"
-  
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-    secret_permissions = [
-      "Set",
-      "Get",
-      "Delete",
-      "Purge",
-      "Recover",
-      "List"
-    ]
-  }
 }
+
+resource azurerm_key_vault_access_policy kv_to_user {
+  key_vault_id = azurerm_key_vault.kv_webapp.id
+  tenant_id = data.azurerm_client_config.current.tenant_id
+  object_id = data.azurerm_client_config.current.object_id
+
+  key_permissions = [
+    "Get",
+    "Delete",
+    "Purge",
+    "Recover",
+    "List"
+  ]
+
+  secret_permissions = [
+    "Set",
+    "Get",
+    "Delete",
+    "Purge",
+    "Recover",
+    "List"
+  ]
+} 
 
 /* resource azurerm_key_vault_access_policy kv {
   key_vault_id = azurerm_key_vault.kv.id
@@ -91,7 +101,6 @@ resource azurerm_key_vault_secret kv_pass_catalog {
   name = "SQLPasswordCatalog"
   value = random_string.connect_pass.result
 }
-
 
 resource azurerm_key_vault_secret kv_catalog_connection_string {
   key_vault_id = azurerm_key_vault.kv_webapp.id
@@ -146,9 +155,10 @@ resource azurerm_windows_web_app web_app {
     resource_group_name = local.res_grp
     location = local.location
     service_plan_id = azurerm_service_plan.web_service_plan.id
+    
   #  key_vault_reference_identity_id = azurerm_key_vault.kv_webapp.id
 
-
+    
     identity {
       type = "SystemAssigned"
     }
@@ -175,6 +185,8 @@ resource azurerm_windows_web_app web_app {
 
     app_settings = {
         "ASPNETCORE_ENVIRONMENT" = "Development"
+        "APPINSIGHTS_INSTRUMENTATIONKEY" =  azurerm_application_insights.esw_insight.instrumentation_key
+        "APPLICATIONINSIGHTS_CONNECTION_STRING" =  azurerm_application_insights.esw_insight.connection_string
         "KEY_VAULT" =  azurerm_key_vault.kv_webapp.id
         "TestKeyValut"="@Microsoft.KeyVault(VaultName=${azurerm_key_vault.kv_webapp.name};SecretName=${azurerm_key_vault_secret.kv_pass_catalog.name})"
     }
@@ -205,6 +217,14 @@ resource null_resource deploy_web_zip {
     }
 
   depends_on = [azurerm_windows_web_app.web_app]
+}
+
+
+resource azurerm_application_insights esw_insight {
+  name                = "insights-${random_string.db_postfix.result}"
+  resource_group_name = local.res_grp
+  location            = local.location
+  application_type    = "web"
 }
 
 
