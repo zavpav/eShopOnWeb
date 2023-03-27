@@ -8,8 +8,11 @@ terraform {
 }
 
 provider azurerm {
-    features {
+  features {
+    resource_group {      
+      prevent_deletion_if_contains_resources = false
     }
+  }
 }
 
 resource azurerm_resource_group res_group {
@@ -100,17 +103,26 @@ resource azurerm_key_vault_secret kv_pass_catalog {
   key_vault_id = azurerm_key_vault.kv_webapp.id
   name = "SQLPasswordCatalog"
   value = random_string.connect_pass.result
+  depends_on = [
+    azurerm_key_vault_access_policy.kv_to_user
+  ]
 }
 
 resource azurerm_key_vault_secret kv_catalog_connection_string {
   key_vault_id = azurerm_key_vault.kv_webapp.id
   name = "SQLCatalogConnectionString"
   value = "Data Source=tcp:${azurerm_mssql_server.db_srv.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.db_db.name};User Id=${azurerm_mssql_server.db_srv.administrator_login};Password='${random_string.connect_pass.result}';"
+  depends_on = [
+    azurerm_key_vault_access_policy.kv_to_user
+  ]
 }
 resource azurerm_key_vault_secret kv_identity_connection_string {
   key_vault_id = azurerm_key_vault.kv_webapp.id
   name = "SQLIdentityConnectionString"
   value = "Data Source=tcp:${azurerm_mssql_server.db_srv.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.db_idnt.name};User Id=${azurerm_mssql_server.db_srv.administrator_login};Password='${random_string.connect_pass.result}';"
+  depends_on = [
+    azurerm_key_vault_access_policy.kv_to_user
+  ]
 }
 
 ###################################################################################################
@@ -155,7 +167,7 @@ resource azurerm_windows_web_app web_app {
     resource_group_name = local.res_grp
     location = local.location
     service_plan_id = azurerm_service_plan.web_service_plan.id
-    
+
   #  key_vault_reference_identity_id = azurerm_key_vault.kv_webapp.id
 
     
@@ -183,6 +195,18 @@ resource azurerm_windows_web_app web_app {
 
     }
 
+    logs {
+      application_logs {
+        file_system_level = "Information"
+      }
+      http_logs {
+        file_system {
+            retention_in_days = 30
+            retention_in_mb   = 25
+        }
+      }
+    }
+
     app_settings = {
         "ASPNETCORE_ENVIRONMENT" = "Development"
         "APPINSIGHTS_INSTRUMENTATIONKEY" =  azurerm_application_insights.esw_insight.instrumentation_key
@@ -191,6 +215,10 @@ resource azurerm_windows_web_app web_app {
         "TestKeyValut"="@Microsoft.KeyVault(VaultName=${azurerm_key_vault.kv_webapp.name};SecretName=${azurerm_key_vault_secret.kv_pass_catalog.name})"
     }
   
+  depends_on = [
+    azurerm_application_insights.esw_insight
+  ]
+
 }
 
 ###################################################################################################
