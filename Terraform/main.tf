@@ -23,6 +23,7 @@ resource azurerm_resource_group res_group {
 locals {
   res_grp = azurerm_resource_group.res_group.name
   location = azurerm_resource_group.res_group.location
+  add_location = "West US"
 }
 
 resource random_string db_postfix {
@@ -158,7 +159,8 @@ resource azurerm_service_plan web_service_plan {
     name = "web_part_plan"
     resource_group_name = local.res_grp
     location = local.location
-    sku_name = "F1"
+    #sku_name = "F1"
+    sku_name = "S1"
     os_type = "Windows"
 }
 
@@ -221,8 +223,6 @@ resource azurerm_windows_web_app web_app {
 
 }
 
-###################################################################################################
-
 resource azurerm_key_vault_access_policy kv_to_webapp {
   key_vault_id = azurerm_key_vault.kv_webapp.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
@@ -235,16 +235,69 @@ resource azurerm_key_vault_access_policy kv_to_webapp {
   secret_permissions = [
     "Get",
   ]
-} 
+}
 
+resource azurerm_windows_web_app_slot webapp_slot1 {
+  name           = "eShopWeb-slot1-${random_string.db_postfix.result}"
+  app_service_id = azurerm_windows_web_app.web_app.id
+
+  site_config {}
+}
+
+resource azurerm_windows_web_app_slot webapp_slot2 {
+  name           = "eShopWeb-slot2-${random_string.db_postfix.result}"
+  app_service_id = azurerm_windows_web_app.web_app.id
+
+  site_config {}
+}
+
+###################################################################################################
+
+resource azurerm_traffic_manager_profile webapp_traffic {
+  name                   = "mytfdemo-${random_string.db_postfix.result}"
+  resource_group_name    = azurerm_resource_group.res_group.name
+  traffic_routing_method = "Weighted"
+
+  dns_config {
+    relative_name = "mytfdemo-${random_string.db_postfix.result}"
+    ttl           = 100
+  }
+
+  monitor_config {
+    protocol                     = "HTTP"
+    port                         = 80
+    path                         = "/"
+    interval_in_seconds          = 30
+    timeout_in_seconds           = 9
+    tolerated_number_of_failures = 3
+  }
+}
+
+resource azurerm_traffic_manager_azure_endpoint webapp_ep {
+  name               = "example-endpoint"
+  profile_id         = azurerm_traffic_manager_profile.webapp_traffic.id
+  weight             = 100
+  target_resource_id = azurerm_windows_web_app_slot.webapp_slot1.id
+}
+
+###################################################################################################
 
 resource null_resource deploy_web_zip {
     provisioner "local-exec" {
-        command = "az webapp deploy --resource-group ${local.res_grp} --name ${azurerm_windows_web_app.web_app.name} --src-path ../src/Web/obj/Release/net7.0/PubTmp/Web-20230325180426612.zip"
+        command = "az webapp deploy --resource-group ${local.res_grp} --name ${azurerm_windows_web_app.web_app.name}                   --src-path ../src/Web/obj/Release/net7.0/PubTmp/Web-20230325180426612.zip"
         interpreter = ["PowerShell", "-Command"]
     }
 
   depends_on = [azurerm_windows_web_app.web_app]
+}
+
+resource null_resource deploy_web_zip_slot {
+    provisioner "local-exec" {
+        command = "az webapp deployment source config-zip --resource-group ${local.res_grp} --name ${azurerm_windows_web_app.web_app.name} --slot ${azurerm_windows_web_app_slot.webapp_slot1.name} --src ../src/Web/obj/Release/net7.0/PubTmp/Web-20230325180426612.zip"
+        interpreter = ["PowerShell", "-Command"]
+    }
+
+  depends_on = [azurerm_windows_web_app_slot.webapp_slot1]
 }
 
 
